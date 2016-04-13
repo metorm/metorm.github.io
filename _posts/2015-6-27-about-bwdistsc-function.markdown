@@ -2,7 +2,7 @@
 layout: post
 title:  "bwdistsc 快速距离场计算函数解析!"
 date:   2015-6-27 22:04:00
-category: code
+tags: [数学,距离场]
 ---
 
 # bwdistsc 快速距离场计算函数解析

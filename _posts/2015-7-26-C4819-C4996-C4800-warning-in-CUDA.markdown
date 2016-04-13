@@ -2,7 +2,7 @@
 layout: post
 title:  "CUDA cmake 中解决 C4819 C4996 C4800 警告"
 date:   2015-7-26 10:55:54
-category: code
+tags: [CUDA,VisualStudio,Cmake]
 ---
 
 # 问题
