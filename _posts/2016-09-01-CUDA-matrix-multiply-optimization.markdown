@@ -158,19 +158,21 @@ __global__ void MatTransMulMat(_T * MatATrans, const size_t MatAHeight, const si
 	_T * MatB, /* MatBHeight = MatAWidth */ const size_t MatBWidth, const size_t MatBPitch,
 	_T * MatR, size_t const MatRPitch)
 {
-	extern __shared__ _T SCache[];
+	extern __shared__ _T SCache[];	//使用线性而非二维的共享储存器。存疑，对性能有提升吗？
 	
 	_T * ACache = SCache;
 	_T * BCache = ACache + MARange * BlockSize * BlockSize;
 	// Malloc size of SCache shall be (MARange + MBRange) * BlockSize * BlockSize
+	// 将线性内存的指针分解成两个使用
 
 	const unsigned int tidX = threadIdx.x;
 	const unsigned int tidY = threadIdx.y;
 
-	// malloc result
+	// malloc result 用于累加
 	_T R[MARange][MBRange] = { {0} };
 
 	// Scan block-by-block
+	// 类似于TILE方法的扫描，但是使用一套坐标转换机制保证了内存访问连续，具体看下面
 	#pragma unroll 1
 	for (size_t b = 0; b < MatAWidth; b += BlockSize)
 	{
@@ -181,6 +183,12 @@ __global__ void MatTransMulMat(_T * MatATrans, const size_t MatAHeight, const si
 		for (unsigned int i = 0; i < MARange; ++i)
 		{
 			// row and col value is swapped in below statement to fit transposed MatA
+			// 访问的row坐标实际上应该是 (MARange*BlockSize)*blockIdx.y + i*BlockSize + tidX
+			// 为了计算速度合并了一个同类项，造成程序更难理解了
+			// MatATrans是已经转置过的
+			// 访问坐标：指针指向第 b + tidY 行，然后向右移动 (MARange*BlockSize)*blockIdx.y 到本block负责的块
+			// 再向右移动 i*BlockSize，到本次循环所需要处理的区域，再向右移动 tidX，到这一区域中本线程负责的元素
+			// 参考上面关于“连续访问”的图理解
 			TempA_G2S[i] = *Pitch2DMemPtr(MatATrans, b + tidY, (MARange*blockIdx.y + i)*BlockSize + tidX, MatAPitch);
 		}
 		_T TempB_G2S[MBRange];
@@ -194,7 +202,7 @@ __global__ void MatTransMulMat(_T * MatATrans, const size_t MatAHeight, const si
 		__syncthreads();	// In case some thread write to shared memory while others are still using it in last loop
 
 		// Write to shared cache
-		// Write coordinate is interlaced in the same manner with above, so the data in shared memory is continuous again
+		// 读写的坐标始终是在交错模式下，保证对 __global__ 和 __shared__ 的访问一直是连续的
 		#pragma unroll
 		for (unsigned int i = 0; i < MARange; ++i)
 		{
@@ -226,7 +234,6 @@ __global__ void MatTransMulMat(_T * MatATrans, const size_t MatAHeight, const si
 			#pragma  unroll
 			for (unsigned int ib = 0; ib < MBRange; ++ib)
 			{
-				// row and col value is swapped in below statement to fit transposed MatA
 				TempB[ib] = BCache[(MBRange*i + ib)*BlockSize + tidX];
 			}
 
@@ -257,3 +264,7 @@ __global__ void MatTransMulMat(_T * MatATrans, const size_t MatAHeight, const si
 	}
 }
 ```
+
+下图展示了`block`中一个线程所负责写入到结果中的元素（红色）以及其需要读取的元素（绿色）。
+
+![线程结构](/img/in-post/2016-09-01-CUDA-matrix-multiply-optimization/thread-configure.png)
