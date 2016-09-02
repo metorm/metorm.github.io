@@ -268,3 +268,5 @@ __global__ void MatTransMulMat(_T * MatATrans, const size_t MatAHeight, const si
 下图展示了`block`中一个线程所负责写入到结果中的元素（红色）以及其需要读取的元素（绿色）。
 
 ![线程结构](/img/in-post/2016-09-01-CUDA-matrix-multiply-optimization/thread-configure.png)
+
+图示例子中，每个`block`包含`4x4`个线程，每个线程处理`3x3`个元素，则每个`block`生成了结果矩阵中`12x12`大小的一个子块。单看该`block`中`threadIdx.x = 0, threadIdx.x = 0`这一线程，其负责计算的是结果矩阵这个`12x12`子块中`3x3`个红色标识的元素。图示绿色方块为需要从`A`（未转置）中读取元素的位置，蓝色为需要从`B`中读取的元素。而这`4x4`个线程一次所处理的元素，形状与紫色粗虚线标识出的那个框相同。
